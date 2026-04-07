@@ -1,6 +1,6 @@
 import express from "express";
-import projectRoutes from "./routes/projectRoutes";
-import { errorHandler } from "./middleware/errorHandler";
+import projectRoutes from "./routes/projectRoutes.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;

@@ -3,12 +3,11 @@ import {
   getAllProjects,
   createProject,
   deployProject,
-} from "../controllers/projectController";
+} from "../controllers/projectController.js";
 const router = express.Router();
 
 router.get("/", getAllProjects);
 router.post("/", createProject);
-router.get("/:id/deploy", deployProject);
-
+router.post("/:id/deploy", deployProject);
 
 export default router;

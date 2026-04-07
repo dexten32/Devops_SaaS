@@ -1,58 +1,54 @@
 #!/bin/bash
 
-# --- Environment Checks ---
-echo "Checking environment..."
-if ! command -v docker &> /dev/null; then
-    echo "Error: Docker is not installed."
+# --- 0. Arguments ---
+PROJECT_NAME=$1
+PROJECT_PORT=$2
+PROJECT_PATH=$3
+ENV_VARS=$4
+
+if [ -z "$PROJECT_NAME" ] || [ -z "$PROJECT_PORT" ] || [ -z "$PROJECT_PATH" ]; then
+    echo "Error: Missing arguments. Usage: ./deploy.sh <name> <port> <path>"
     exit 1
 fi
 
-if ! docker info &> /dev/null; then
-    echo "Error: Docker is not running. Start the docker daemon first."
-    exit 1
-fi
+# --- 1. Navigate to Project ---
+echo "Moving to project directory: $PROJECT_PATH"
+cd "$PROJECT_PATH" || { echo "Directory not found"; exit 1; }
+echo "Current directory: $(pwd)"
 
-# --- Setup Workspace ---
-
-WORKSPACE="workspace"
-rm -rf "$WORKSPACE"
-mkdir "$WORKSPACE"
-cd "$WORKSPACE" || exit
-
-#Create dummy HTML Project
-echo "<h1>Deploy Successfull!</h1><p>Build time: $(date)</p>" > index.html
-
-#Generate Dynamic Docker file
-echo "--- Generating Dockerfile ---"
-cat <<EOF > Dockerfile
-from nginx:alpine
-copy index.html /usr/share/nginx/html/index.html
+# --- 2. Smart Dockerfile Check ---
+# If there is NO Dockerfile, we create a dummy one so the script doesn't crash.
+if [ ! -f "Dockerfile" ]; then
+    echo "No Dockerfile found. Creating a dummy Nginx setup..."
+    echo "<h1>Deploy $PROJECT_NAME</h1><p>PORT: $PROJECT_PORT</p>" > index.html
+    cat <<EOF > Dockerfile
+FROM nginx:alpine
+COPY index.html /usr/share/nginx/html/index.html
 EXPOSE 80
 EOF
+fi
 
-
-# --- Build and Run ---
-
-TAG="myapp:v$(date +%s)"
-CONTAINER_NAME="my_web_app"
+# --- 3. Build and Run ---
+TAG="${PROJECT_NAME,,}:v$(date +%s)" # ,, makes it lowercase (Docker requirement)
+CONTAINER_NAME="container_$PROJECT_NAME"
 
 echo "Building Image $TAG..."
 docker build -t "$TAG" .
 
-echo "Removing old container if exists..."
+echo "Cleaning up old containers..."
 docker stop "$CONTAINER_NAME" 2>/dev/null || true
 docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
-echo "Running container on port 8080..."
-docker run -d --name "$CONTAINER_NAME" -p 8080:80 "$TAG"
+echo "Running $PROJECT_NAME on port $PROJECT_PORT..."
+docker run -d --name "$CONTAINER_NAME" -p "$PROJECT_PORT":80 ${ENV_VARS} "$TAG"
 
-#--- Health Check ---
-echo "Performing health check..."
+# --- 4. Health Check ---
+echo "Performing health check on port $PROJECT_PORT..."
 sleep 2
-STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:"$PROJECT_PORT")
 
 if [ "$STATUS_CODE" -eq 200 ]; then
-    echo "Success! The site is live at http://localhost:8080"
+    echo "Success! The site is live at http://localhost:$PROJECT_PORT"
 else
     echo "Deployment failed with status: $STATUS_CODE"
     exit 1
